@@ -90,3 +90,4 @@ else:
             seq = packet.get("seq")
             pyautogui.scroll(int(packet.get("amount", 0)))
             sock.sendto(json.dumps({"type": "ack", "seq": seq}).encode(), addr)
+

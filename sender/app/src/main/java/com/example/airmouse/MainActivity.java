@@ -1,4 +1,4 @@
- package com.example.airmouse;
+package com.example.airmouse;
 
 import android.app.Activity;
 import android.content.Intent;
@@ -21,7 +21,6 @@ import android.widget.Toast;
 import java.util.List;
 import java.util.Locale;
 
-/** Main screen: reads calibrated sensors, converts motion to mouse events, and sends UDP JSON. */
 public class MainActivity extends Activity implements SensorReader.Listener {
     private static final int DEFAULT_UDP_PORT = 5000;
     private static final long UI_INTERVAL_MS = 120L;
@@ -39,7 +38,9 @@ public class MainActivity extends Activity implements SensorReader.Listener {
     private TextView pendingAckText;
     private TextView sensitivityLabel;
     private TextView deadzoneLabel;
+    private TextView neutralPoseText;
     private Button startStopButton;
+    private Button neutralPoseButton;
     private MotionPreviewView previewView;
 
     private boolean sending = false;
@@ -61,6 +62,7 @@ public class MainActivity extends Activity implements SensorReader.Listener {
         buildUi();
         updateCalibrationText();
         updateSensorText();
+        updateNeutralPoseText();
         setStatus(sensorReader.hasRequiredSensors()
                 ? "Ready. Enter laptop IP, calibrate, then press Start."
                 : "Required sensors not found. Accelerometer and gyroscope are needed.");
@@ -71,12 +73,16 @@ public class MainActivity extends Activity implements SensorReader.Listener {
         super.onResume();
         calibration.load(this);
         updateCalibrationText();
+        // Sensors need to be running continuously so accel/mag are fresh
+        // whenever the user taps "Set Neutral Pose", even before Start.
+        sensorReader.start();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         if (sending) stopSending();
+        else sensorReader.stop();
     }
 
     @Override
@@ -117,6 +123,18 @@ public class MainActivity extends Activity implements SensorReader.Listener {
         portEdit.setInputType(InputType.TYPE_CLASS_NUMBER);
         portEdit.setText(String.valueOf(DEFAULT_UDP_PORT));
         root.addView(portEdit, matchWrap());
+
+        root.addView(sectionTitle("Neutral Pose (hold grip)"));
+        root.addView(smallText("Hold the phone exactly how you want to use it as an air mouse " +
+                "(e.g. screen facing you, perpendicular to the keyboard) and tap the button below. " +
+                "This fixes the up/down drift that happens when the phone is turned to face different directions."));
+        neutralPoseButton = new Button(this);
+        neutralPoseButton.setText("Set Neutral Pose");
+        neutralPoseButton.setOnClickListener(v -> setNeutralPose());
+        root.addView(neutralPoseButton, matchWrapTop(6));
+        neutralPoseText = smallText("");
+        neutralPoseText.setTypeface(Typeface.DEFAULT_BOLD);
+        root.addView(neutralPoseText, matchWrapTop(4));
 
         startStopButton = new Button(this);
         startStopButton.setText("Start Sending");
@@ -207,7 +225,8 @@ public class MainActivity extends Activity implements SensorReader.Listener {
             calibration.load(this);
             controller.resetRuntimeState();
             updateCalibrationText();
-            setStatus("Calibration reloaded.");
+            updateNeutralPoseText();
+            setStatus("Calibration reloaded. Set neutral pose again before sending.");
         });
         root.addView(reloadCalButton, matchWrapTop(4));
 
@@ -227,9 +246,26 @@ public class MainActivity extends Activity implements SensorReader.Listener {
         setContentView(scrollView);
     }
 
+    private void setNeutralPose() {
+        boolean ok = controller.setNeutralPose();
+        if (ok) {
+            previewView.resetCursor();
+            updateNeutralPoseText();
+            setStatus("Neutral pose set. Hold this grip as your 'center' from now on.");
+            toast("Neutral pose set.");
+        } else {
+            setStatus("Could not set neutral pose yet - waiting for sensor data. Try again in a second.");
+            toast("Sensors not ready yet, try again.");
+        }
+    }
+
     private void startSending() {
         if (!sensorReader.hasRequiredSensors()) {
             toast("Accelerometer or gyroscope not found.");
+            return;
+        }
+        if (!controller.hasNeutralPose()) {
+            toast("Set the neutral pose first (hold your grip and tap 'Set Neutral Pose').");
             return;
         }
         String ip = ipEdit.getText().toString().trim();
@@ -248,7 +284,6 @@ public class MainActivity extends Activity implements SensorReader.Listener {
             closeUdp();
             udpClient = new UdpMouseClient(ip, port, msg -> runOnUiThread(() -> setStatus(msg)));
             calibration.load(this);
-            controller.resetRuntimeState();
             sensorReader.start();
             sending = true;
             startStopButton.setText("Stop Sending");
@@ -262,7 +297,7 @@ public class MainActivity extends Activity implements SensorReader.Listener {
 
     private void stopSending() {
         sending = false;
-        sensorReader.stop();
+        sensorReader.start(); // keep sensors running so neutral pose / preview stay live
         closeUdp();
         startStopButton.setText("Start Sending");
         pendingAckText.setText("Pending ACK: 0");
@@ -378,16 +413,16 @@ public class MainActivity extends Activity implements SensorReader.Listener {
         float[] orientation = controller.getFusedOrientationCopy();
         String text = String.format(Locale.US,
                 "Raw Acc:       [%7.3f %7.3f %7.3f]\n" +
-                "Corrected Acc: [%7.3f %7.3f %7.3f]\n" +
-                "Gravity LPF:   [%7.3f %7.3f %7.3f]\n" +
-                "Linear Acc HPF:[%7.3f %7.3f %7.3f]\n\n" +
-                "Raw Gyro:      [%7.3f %7.3f %7.3f]\n" +
-                "Corrected Gyro:[%7.3f %7.3f %7.3f]\n" +
-                "Filtered Gyro: [%7.3f %7.3f %7.3f]\n\n" +
-                "Raw Mag:       [%7.3f %7.3f %7.3f]\n" +
-                "Corrected Mag: [%7.3f %7.3f %7.3f]\n\n" +
-                "Fused orient:  yaw=%.3f pitch=%.3f roll=%.3f\n\n" +
-                "Sensors used:\n%s",
+                        "Corrected Acc: [%7.3f %7.3f %7.3f]\n" +
+                        "Gravity LPF:   [%7.3f %7.3f %7.3f]\n" +
+                        "Linear Acc HPF:[%7.3f %7.3f %7.3f]\n\n" +
+                        "Raw Gyro:      [%7.3f %7.3f %7.3f]\n" +
+                        "Corrected Gyro:[%7.3f %7.3f %7.3f]\n" +
+                        "Filtered Gyro: [%7.3f %7.3f %7.3f]\n\n" +
+                        "Raw Mag:       [%7.3f %7.3f %7.3f]\n" +
+                        "Corrected Mag: [%7.3f %7.3f %7.3f]\n\n" +
+                        "Orientation (relative to neutral pose):\n  yaw=%.3f pitch=%.3f roll=%.3f\n\n" +
+                        "Sensors used:\n%s",
                 lastRawAcc[0], lastRawAcc[1], lastRawAcc[2],
                 lastCorrectedAcc[0], lastCorrectedAcc[1], lastCorrectedAcc[2],
                 gravity[0], gravity[1], gravity[2],
@@ -409,6 +444,14 @@ public class MainActivity extends Activity implements SensorReader.Listener {
 
     private void updateCalibrationText() {
         if (calibrationText != null) calibrationText.setText(calibration.summary());
+    }
+
+    private void updateNeutralPoseText() {
+        if (neutralPoseText != null) {
+            neutralPoseText.setText(controller.hasNeutralPose()
+                    ? "Neutral pose: SET"
+                    : "Neutral pose: NOT SET (required before Start Sending)");
+        }
     }
 
     private void updateSettingLabels() {

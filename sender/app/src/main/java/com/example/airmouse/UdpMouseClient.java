@@ -34,6 +34,11 @@ public class UdpMouseClient {
     private final Object sendLock = new Object();
     private final StatusListener statusListener;
 
+    private final Object moveAccumLock = new Object();
+    private double pendingDx = 0.0;
+    private double pendingDy = 0.0;
+    private boolean hasPendingMove = false;
+
     private static class PendingPacket {
         final String json;
         volatile long lastSentMs;
@@ -63,19 +68,53 @@ public class UdpMouseClient {
         if (!running.get()) return;
         if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return;
 
-        final String json = String.format(Locale.US,
-                "{\"type\":\"move\",\"dx\":%.3f,\"dy\":%.3f}", dx, dy);
+        synchronized (moveAccumLock) {
+            pendingDx += dx;
+            pendingDy += dy;
+            hasPendingMove = true;
+        }
 
-        if (!moveSendBusy.compareAndSet(false, true)) return;
-        executor.execute(() -> {
+        if (!moveSendBusy.compareAndSet(false, true)) return; // a flush is already scheduled/in-flight
+        executor.execute(this::flushPendingMove);
+    }
+
+    private void flushPendingMove() {
+        try {
+            double dx;
+            double dy;
+            synchronized (moveAccumLock) {
+                if (!hasPendingMove) {
+                    moveSendBusy.set(false);
+                    return;
+                }
+                dx = pendingDx;
+                dy = pendingDy;
+                pendingDx = 0.0;
+                pendingDy = 0.0;
+                hasPendingMove = false;
+            }
+
+            String json = String.format(Locale.US,
+                    "{\"type\":\"move\",\"dx\":%.3f,\"dy\":%.3f}", dx, dy);
             try {
                 sendRaw(json);
             } catch (Exception ex) {
                 notifyStatus("Move send failed: " + ex.getMessage());
-            } finally {
+            }
+
+            boolean more;
+            synchronized (moveAccumLock) {
+                more = hasPendingMove;
+            }
+            if (more) {
+                executor.execute(this::flushPendingMove);
+            } else {
                 moveSendBusy.set(false);
             }
-        });
+        } catch (RuntimeException ex) {
+            moveSendBusy.set(false);
+            throw ex;
+        }
     }
 
     public int sendClick() {
