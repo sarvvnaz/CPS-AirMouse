@@ -17,8 +17,11 @@ public class AirMouseController {
         public float gyroLowPassAlpha = 0.72f;
         public float gravityLowPassAlpha = 0.90f;
         public float complementaryGyroWeight = 0.985f;
-        public float clickGyroThreshold = 2.7f;
-        public float scrollAccelThreshold = 3.2f;
+
+        // for making click less sensetive
+        public float clickGyroThreshold = 4.5f;
+        // for making scroll less sensetive
+        public float scrollAccelThreshold = 5.0f;
         public long clickCooldownMs = 650L;
         public long scrollCooldownMs = 700L;
         public int scrollAmount = 5;
@@ -215,9 +218,36 @@ public class AirMouseController {
 
     private void detectScrollOrClick(List<Event> events) {
 
+//        long now = SystemClock.uptimeMillis();
+//        if (now < ignoreGestureUntilMs) return;
+//        else return;
+
         long now = SystemClock.uptimeMillis();
         if (now < ignoreGestureUntilMs) return;
-        else return;
+
+        // Scroll: fast linear Y movement. Require Y dominance so normal pointer motion does not scroll.
+        float ay = linearAccel[1];
+        float absAy = Math.abs(ay);
+        boolean yDominant = absAy > Math.abs(linearAccel[0]) * 1.25f &&
+                absAy > Math.abs(linearAccel[2]) * 1.25f;
+        boolean notClickLike = Math.abs(filteredGyro[1]) < config.clickGyroThreshold * 0.75f;
+        if (yDominant && notClickLike && absAy > config.scrollAccelThreshold &&
+                now - lastScrollMs > config.scrollCooldownMs) {
+            int amount = ay > 0 ? -config.scrollAmount : config.scrollAmount;
+            if (config.invertScroll) amount = -amount;
+            lastScrollMs = now;
+            events.add(new Event.Scroll(amount));
+            return;
+        }
+
+        // Click: quick rotation around Y axis. Default is negative Y; user can invert.
+        boolean clickDetected = config.invertClick ?
+                filteredGyro[1] > config.clickGyroThreshold :
+                filteredGyro[1] < -config.clickGyroThreshold;
+        if (clickDetected && now - lastClickMs > config.clickCooldownMs) {
+            lastClickMs = now;
+            events.add(new Event.Click());
+        }
 
     }
 
