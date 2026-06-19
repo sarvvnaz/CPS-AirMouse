@@ -79,66 +79,65 @@ public class SensorReader implements SensorEventListener {
         if (listener != null) listener.onSensorStatus("SensorReader stopped.");
     }
 
-Replace your current `onSensorChanged()` method with:
 
-@Override
-public void onSensorChanged(SensorEvent event) {
-    float[] firstThree = firstThree(event.values);
-    int type = event.sensor.getType();
-
-    if (type == Sensor.TYPE_ACCELEROMETER ||
-            type == Sensor.TYPE_ACCELEROMETER_UNCALIBRATED) {
-
-        TraceMarks.begin("sensor_read_accel");
-        try {
-            if (listener != null) {
-                listener.onAccelerometer(firstThree, event.timestamp);
-            }
-        } finally {
-            TraceMarks.end();
-        }
-
-    } else if (type == Sensor.TYPE_GYROSCOPE ||
-            type == Sensor.TYPE_GYROSCOPE_UNCALIBRATED) {
-
-        TraceMarks.begin("sensor_read_gyro");
-        try {
-            float dt = 0f;
-
-            if (lastGyroTimestampNs != 0L) {
-                dt = (event.timestamp - lastGyroTimestampNs) * 1e-9f;
-
-                if (dt < 0f || dt > 0.2f) {
-                    dt = 0f;
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        float[] firstThree = firstThree(event.values);
+        int type = event.sensor.getType();
+    
+        if (type == Sensor.TYPE_ACCELEROMETER ||
+                type == Sensor.TYPE_ACCELEROMETER_UNCALIBRATED) {
+    
+            TraceMarks.begin("sensor_read_accel");
+            try {
+                if (listener != null) {
+                    listener.onAccelerometer(firstThree, event.timestamp);
                 }
+            } finally {
+                TraceMarks.end();
             }
-
-            lastGyroTimestampNs = event.timestamp;
-
-            if (listener != null) {
-                listener.onGyroscope(
-                        firstThree,
-                        event.timestamp,
-                        dt
-                );
+    
+        } else if (type == Sensor.TYPE_GYROSCOPE ||
+                type == Sensor.TYPE_GYROSCOPE_UNCALIBRATED) {
+    
+            TraceMarks.begin("sensor_read_gyro");
+            try {
+                float dt = 0f;
+    
+                if (lastGyroTimestampNs != 0L) {
+                    dt = (event.timestamp - lastGyroTimestampNs) * 1e-9f;
+    
+                    if (dt < 0f || dt > 0.2f) {
+                        dt = 0f;
+                    }
+                }
+    
+                lastGyroTimestampNs = event.timestamp;
+    
+                if (listener != null) {
+                    listener.onGyroscope(
+                            firstThree,
+                            event.timestamp,
+                            dt
+                    );
+                }
+            } finally {
+                TraceMarks.end();
             }
-        } finally {
-            TraceMarks.end();
-        }
-
-    } else if (type == Sensor.TYPE_MAGNETIC_FIELD ||
-            type == Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED) {
-
-        TraceMarks.begin("sensor_read_mag");
-        try {
-            if (listener != null) {
-                listener.onMagnetometer(firstThree, event.timestamp);
+    
+        } else if (type == Sensor.TYPE_MAGNETIC_FIELD ||
+                type == Sensor.TYPE_MAGNETIC_FIELD_UNCALIBRATED) {
+    
+            TraceMarks.begin("sensor_read_mag");
+            try {
+                if (listener != null) {
+                    listener.onMagnetometer(firstThree, event.timestamp);
+                }
+            } finally {
+                TraceMarks.end();
             }
-        } finally {
-            TraceMarks.end();
         }
     }
-}
 
 
     @Override
