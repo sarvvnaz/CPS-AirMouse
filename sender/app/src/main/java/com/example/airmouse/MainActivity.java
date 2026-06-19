@@ -73,8 +73,6 @@ public class MainActivity extends Activity implements SensorReader.Listener {
         super.onResume();
         calibration.load(this);
         updateCalibrationText();
-        // Sensors need to be running continuously so accel/mag are fresh
-        // whenever the user taps "Set Neutral Pose", even before Start.
         sensorReader.start();
     }
 
@@ -181,7 +179,7 @@ public class MainActivity extends Activity implements SensorReader.Listener {
         deadzoneLabel = smallText("");
         root.addView(deadzoneLabel, matchWrapTop(6));
         SeekBar deadzoneBar = new SeekBar(this);
-        deadzoneBar.setMax(30); // displayed as 0.0000 to 0.0030 rad
+        deadzoneBar.setMax(30); 
         deadzoneBar.setProgress(7);
         deadzoneBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -297,7 +295,7 @@ public class MainActivity extends Activity implements SensorReader.Listener {
 
     private void stopSending() {
         sending = false;
-        sensorReader.start(); // keep sensors running so neutral pose / preview stay live
+        sensorReader.start(); 
         closeUdp();
         startStopButton.setText("Start Sending");
         pendingAckText.setText("Pending ACK: 0");

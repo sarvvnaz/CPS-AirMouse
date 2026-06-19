@@ -17,7 +17,7 @@ public class SensorReader implements SensorEventListener {
         void onSensorStatus(String message);
     }
 
-    public static final int DEFAULT_SENSOR_DELAY_US = 10_000; // requested 100 Hz
+    public static final int DEFAULT_SENSOR_DELAY_US = 10_000; 
 
     private final SensorManager sensorManager;
     private final Listener listener;
@@ -91,7 +91,7 @@ public class SensorReader implements SensorEventListener {
                 float dt = 0f;
                 if (lastGyroTimestampNs != 0L) {
                     dt = (event.timestamp - lastGyroTimestampNs) * 1e-9f;
-                    if (dt < 0f || dt > 0.2f) dt = 0f; // protect against large pause/resume gaps
+                    if (dt < 0f || dt > 0.2f) dt = 0f; 
                 }
                 lastGyroTimestampNs = event.timestamp;
                 if (listener != null) listener.onGyroscope(firstThree, event.timestamp, dt);

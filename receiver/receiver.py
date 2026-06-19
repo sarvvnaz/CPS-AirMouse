@@ -68,7 +68,7 @@ else:
     while True:
         data, addr = sock.recvfrom(2048)
         try:
-            packet = json.loads(data)  # no need to decode first, json.loads accepts bytes
+            packet = json.loads(data)  
         except Exception:
             continue
 
