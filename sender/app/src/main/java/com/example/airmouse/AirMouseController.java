@@ -155,6 +155,8 @@ public class AirMouseController {
     }
 
     private void integrateAndFuseOrientation(float dtSeconds) {
+    TraceMarks.begin("filter_fusion");
+    try {
         if (!hasFusedOrientation) {
             float[] relative = computeRelativeAngles();
             if (relative != null) {
@@ -165,9 +167,14 @@ public class AirMouseController {
             hasPreviousOrientation = true;
         }
 
-        fusedOrientation[0] = wrapAngle(fusedOrientation[0] + filteredGyro[2] * dtSeconds);
-        fusedOrientation[1] = wrapAngle(fusedOrientation[1] + filteredGyro[0] * dtSeconds);
-        fusedOrientation[2] = wrapAngle(fusedOrientation[2] + filteredGyro[1] * dtSeconds);
+        TraceMarks.begin("filter_gyro_integrate");
+        try {
+            fusedOrientation[0] = wrapAngle(fusedOrientation[0] + filteredGyro[2] * dtSeconds);
+            fusedOrientation[1] = wrapAngle(fusedOrientation[1] + filteredGyro[0] * dtSeconds);
+            fusedOrientation[2] = wrapAngle(fusedOrientation[2] + filteredGyro[1] * dtSeconds);
+        } finally {
+            TraceMarks.end();
+        }
 
         if (config.useComplementaryFusion) {
             float[] relative = computeRelativeAngles();
@@ -179,7 +186,10 @@ public class AirMouseController {
                 fusedOrientation[2] = angleBlend(fusedOrientation[2], relative[2], gyroW, sensorW);
             }
         }
+    } finally {
+        TraceMarks.end();
     }
+}
 
 
     private float[] computeRelativeAngles() {
@@ -252,22 +262,28 @@ public class AirMouseController {
     }
 
     private void detectMove(List<Event> events) {
-        if (!hasPreviousOrientation) return;
-
-        float deltaYawZ = wrapAngle(fusedOrientation[0] - previousOrientation[0]);
-        float deltaPitchX = wrapAngle(fusedOrientation[1] - previousOrientation[1]);
-        System.arraycopy(fusedOrientation, 0, previousOrientation, 0, 3);
-
-        if (Math.abs(deltaYawZ) < config.moveDeadZoneRad) deltaYawZ = 0f;
-        if (Math.abs(deltaPitchX) < config.moveDeadZoneRad) deltaPitchX = 0f;
-
-        double dx = clamp(deltaYawZ * config.pointerSensitivity, -config.maxMovePerPacket, config.maxMovePerPacket);
-        double dy = clamp(-deltaPitchX * config.pointerSensitivity, -config.maxMovePerPacket, config.maxMovePerPacket);
-        if (config.invertX) dx = -dx;
-        if (config.invertY) dy = -dy;
-
-        if (Math.abs(dx) >= 0.15 || Math.abs(dy) >= 0.15) {
-            events.add(new Event.Move(dx, dy));
+        TraceMarks.begin("compute_cursor_delta");
+        try {
+            if (!hasPreviousOrientation) return;
+    
+            float deltaYawZ = wrapAngle(fusedOrientation[0] - previousOrientation[0]);
+            float deltaPitchX = wrapAngle(fusedOrientation[1] - previousOrientation[1]);
+            System.arraycopy(fusedOrientation, 0, previousOrientation, 0, 3);
+    
+            if (Math.abs(deltaYawZ) < config.moveDeadZoneRad) deltaYawZ = 0f;
+            if (Math.abs(deltaPitchX) < config.moveDeadZoneRad) deltaPitchX = 0f;
+    
+            double dx = clamp(deltaYawZ * config.pointerSensitivity, -config.maxMovePerPacket, config.maxMovePerPacket);
+            double dy = clamp(-deltaPitchX * config.pointerSensitivity, -config.maxMovePerPacket, config.maxMovePerPacket);
+    
+            if (config.invertX) dx = -dx;
+            if (config.invertY) dy = -dy;
+    
+            if (Math.abs(dx) >= 0.15 || Math.abs(dy) >= 0.15) {
+                events.add(new Event.Move(dx, dy));
+            }
+        } finally {
+            TraceMarks.end();
         }
     }
 
