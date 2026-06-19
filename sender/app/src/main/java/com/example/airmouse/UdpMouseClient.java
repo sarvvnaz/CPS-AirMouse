@@ -191,10 +191,15 @@ public class UdpMouseClient {
     }
 
     private void sendRaw(String json) throws Exception {
-        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-        DatagramPacket packet = new DatagramPacket(bytes, bytes.length, host, port);
-        synchronized (sendLock) {
-            socket.send(packet);
+        TraceMarks.begin("net_udp_send");
+        try {
+            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+            DatagramPacket packet = new DatagramPacket(bytes, bytes.length, host, port);
+            synchronized (sendLock) {
+                socket.send(packet);
+            }
+        } finally {
+            TraceMarks.end();
         }
     }
 
